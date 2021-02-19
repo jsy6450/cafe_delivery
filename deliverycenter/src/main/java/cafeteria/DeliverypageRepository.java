@@ -8,6 +8,5 @@ import java.util.List;
 public interface DeliverypageRepository extends CrudRepository<Deliverypage, Long> {
 
     List<> findByOrderId(Long orderId);
-    List<> findByOrderId(Long orderId);
 
 }
