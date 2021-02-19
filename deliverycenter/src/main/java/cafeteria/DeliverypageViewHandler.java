@@ -22,13 +22,13 @@ public class DeliverypageViewHandler {
         try {
             if (ordered.isMe()) {
                 // view 객체 생성
-                  = new ();
+                Deliverypage deliverypage = new Deliverypage();
                 // view 객체에 이벤트의 Value 를 set 함
-                .setOrderId(.getId());
-                .setAmt(.getAmt());
-                .setStatus(.getStatus());
+                deliverypage.setOrderId(ordered.getId());
+                deliverypage.setAmt(ordered.getAmt());
+                deliverypage.setStatus(ordered.getStatus());
                 // view 레파지 토리에 save
-                Repository.save();
+                deliverypageRepository.save(deliverypage);
             }
         }catch (Exception e){
             e.printStackTrace();
@@ -41,11 +41,13 @@ public class DeliverypageViewHandler {
         try {
             if (shipped.isMe()) {
                 // view 객체 조회
-                List<> List = Repository.findByOrderId(.getOrderId());
-                for(  : List){
+                List<Deliverypage> deliverypageList = deliverypageRepository.findByOrderId(shipped.getOrderId());
+                for(Deliverypage deliverypage  : deliverypageList){
                     // view 객체에 이벤트의 eventDirectValue 를 set 함
+                     deliverypage.setDeliveryId(shipped.getId());
+                     deliverypage.setStatus(shipped.getStatus());
                     // view 레파지 토리에 save
-                    Repository.save();
+                    deliverypageRepository.save(deliverypage);
                 }
             }
         }catch (Exception e){
@@ -57,11 +59,12 @@ public class DeliverypageViewHandler {
         try {
             if (deliveryCanceled.isMe()) {
                 // view 객체 조회
-                List<> List = Repository.findByOrderId(.getOrderId());
-                for(  : List){
+                List<Deliverypage> deliverypageList = deliverypageRepository.findByOrderId(deliveryCanceled.getOrderId());
+                for(Deliverypage deliverypage  : deliverypageList){
                     // view 객체에 이벤트의 eventDirectValue 를 set 함
+                    deliverypage.setStatus(deliveryCanceled.getStatus());
                     // view 레파지 토리에 save
-                    Repository.save();
+                    deliverypageRepository.save(deliverypage);
                 }
             }
         }catch (Exception e){
