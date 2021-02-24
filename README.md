@@ -24,9 +24,7 @@
     - [Persistence Volum Claim](#Persistence-Volum-Claim)
     - [ConfigMap / Secret](#ConfigMap--Secret)
 
-# 서비스 시나리오
-
-음
+# 음료배달 서비스 시나리오
 
 기능적 요구사항
 - 고객이 주문 취소를 하게 되면, 주문정보는 삭제되나, 배송팀에서는 사후 활용을 위해 취소장부를 별도 저장한다.
