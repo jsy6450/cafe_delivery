@@ -45,115 +45,142 @@
 ![hexa](https://user-images.githubusercontent.com/31643538/108976354-c4abd900-76ca-11eb-9864-1523cdbb5b84.png)
 
 
-```
-- Entity Pattern 과 Repository Pattern 을 적용하여 JPA 를 통하여 다양한 데이터소스 유형 (RDB or NoSQL) 에 대한 별도의 처리가 없도록 데이터 접근 어댑터를 자동 생성하기 위하여 Spring Data REST 의 RestRepository 를 적용하였다
-```
-package cafeteria;
+- REST API 의 테스트
 
-import org.springframework.data.repository.PagingAndSortingRepository;
-
-public interface OrderRepository extends PagingAndSortingRepository<Order, Long>{
-}
-```
-- 적용 후 REST API 의 테스트
-```
 # order 서비스의 주문처리
-root@siege-5b99b44c9c-8qtpd:/# http http://order:8080/orders phoneNumber="01012345678" productName="coffee" qty=3 amt=5000
+root@seige-74d7df4cd9-7sckv:/# http http://order:8080/orders phoneNumber="01082947794" productName="coffee" qty=3 amt=6000 
 HTTP/1.1 201 
 Content-Type: application/json;charset=UTF-8
-Date: Sat, 20 Feb 2021 14:20:20 GMT
-Location: http://order:8080/orders/1
+Date: Wed, 24 Feb 2021 10:27:20 GMT
+Location: http://order:8080/orders/8
 Transfer-Encoding: chunked
+
 {
     "_links": {
         "order": {
-            "href": "http://order:8080/orders/1"
+            "href": "http://order:8080/orders/8"
         },
         "self": {
-            "href": "http://order:8080/orders/1"
+            "href": "http://order:8080/orders/8"
         }
     },
-    "amt": 5000,
-    "createTime": "2021-02-20T14:20:17.783+0000",
-    "phoneNumber": "01012345678",
+    "amt": 6000,
+    "createTime": "2021-02-24T10:27:20.732+0000",
+    "phoneNumber": "01082947794",
     "productName": "coffee",
     "qty": 3,
     "status": "Ordered"
 }
 
-# payment 조회
-root@siege-5b99b44c9c-8qtpd:/# http http://payment:8080/payments/search/findByOrderId?orderId=1 
+root@seige-74d7df4cd9-7sckv:/# http http://drink:8080/drinks
 HTTP/1.1 200 
 Content-Type: application/hal+json;charset=UTF-8
-Date: Sat, 20 Feb 2021 14:21:21 GMT
+Date: Wed, 24 Feb 2021 10:28:25 GMT
 Transfer-Encoding: chunked
+
 {
     "_embedded": {
-        "payments": [
+        "drinks": [
             {
                 "_links": {
-                    "payment": {
-                        "href": "http://payment:8080/payments/1"
+                    "drink": {
+                        "href": "http://drink:8080/drinks/2"
                     },
                     "self": {
-                        "href": "http://payment:8080/payments/1"
+                        "href": "http://drink:8080/drinks/2"
                     }
                 },
-                "amt": 5000,
-                "createTime": "2021-02-20T14:20:19.020+0000",
-                "orderId": 1,
-                "phoneNumber": "01012345678",
+                "createTime": "2021-02-24T10:27:20.846+0000",
+                "orderId": 8,
+                "phoneNumber": "01082947794",
+                "productName": "coffee",
+                "qty": 3,
                 "status": "PaymentApproved"
             }
         ]
     },
     "_links": {
+        "profile": {
+            "href": "http://drink:8080/profile/drinks"
+        },
+        "search": {
+            "href": "http://drink:8080/drinks/search"
+        },
         "self": {
-            "href": "http://payment:8080/payments/search/findByOrderId?orderId=1"
+            "href": "http://drink:8080/drinks{?page,size,sort}",
+            "templated": true
         }
+    },
+    "page": {
+        "number": 0,
+        "size": 20,
+        "totalElements": 1,
+        "totalPages": 1
     }
 }
 
-# drink 서비스의 접수처리
-root@siege-5b99b44c9c-8qtpd:/# http patch http://drink:8080/drinks/1 status="Receipted"
+root@seige-74d7df4cd9-7sckv:/# http PATCH http://drink:8080/drinks/2 status="Made"
 HTTP/1.1 200 
 Content-Type: application/json;charset=UTF-8
-Date: Sat, 20 Feb 2021 14:32:03 GMT
+Date: Wed, 24 Feb 2021 10:29:24 GMT
 Transfer-Encoding: chunked
+
 {
     "_links": {
         "drink": {
-            "href": "http://drink:8080/drinks/1"
+            "href": "http://drink:8080/drinks/2"
         },
         "self": {
-            "href": "http://drink:8080/drinks/1"
+            "href": "http://drink:8080/drinks/2"
         }
     },
-    "createTime": "2021-02-20T14:29:13.533+0000",
-    "orderId": 1,
-    "phoneNumber": "01012345678",
+    "createTime": "2021-02-24T10:27:20.846+0000",
+    "orderId": 8,
+    "phoneNumber": "01082947794",
     "productName": "coffee",
     "qty": 3,
-    "status": "Receipted"
+    "status": "Made"
 }
 
-# customercenter 서비스의 상태확인
-root@siege-5b99b44c9c-8qtpd:/# http http://customercenter:8080/mypages/search/findByPhoneNumber?phoneNumber="01012345678"
+root@seige-74d7df4cd9-7sckv:/# http http://delivery:8080/deliveries
 HTTP/1.1 200 
-Content-Type: application/json;charset=UTF-8
-Date: Sat, 20 Feb 2021 14:36:15 GMT
+Content-Type: application/hal+json;charset=UTF-8
+Date: Wed, 24 Feb 2021 10:30:16 GMT
 Transfer-Encoding: chunked
-[
-    {
-        "amt": 5000,
-        "id": 1,
-        "orderId": 1,
-        "phoneNumber": "01012345678",
-        "productName": "coffee",
-        "qty": 3,
-        "status": "Ordered"
+
+{
+    "_embedded": {
+        "deliveries": [
+            {
+                "_links": {
+                    "delivery": {
+                        "href": "http://delivery:8080/deliveries/9"
+                    },
+                    "self": {
+                        "href": "http://delivery:8080/deliveries/9"
+                    }
+                },
+                "orderId": 2,
+                "status": "Delivery Started"
+            }
+        ]
+    },
+    "_links": {
+        "profile": {
+            "href": "http://delivery:8080/profile/deliveries"
+        },
+        "self": {
+            "href": "http://delivery:8080/deliveries{?page,size,sort}",
+            "templated": true
+        }
+    },
+    "page": {
+        "number": 0,
+        "size": 20,
+        "totalElements": 1,
+        "totalPages": 1
     }
-]
+}
 ```
 
 ## API Gateway
