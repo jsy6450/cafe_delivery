@@ -55,7 +55,7 @@ public class DeliverypageViewHandler {
         }
     }
     @StreamListener(KafkaProcessor.INPUT)
-    public void whenDeliveryCanceled_then_UPDATE_2(@Payload DeliveryCanceled deliveryCanceled) {
+     public void whenDeliveryCanceled_then_UPDATE_2(@Payload DeliveryCanceled deliveryCanceled) {
         try {
             if (deliveryCanceled.isMe()) {
                 // view 객체 조회

@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: deliverycenter
-          image: username/deliverycenter:latest
+          image: 336676056763.dkr.ecr.ap-northeast-2.amazonaws.com/deliverycenter:v1
           ports:
             - containerPort: 8080
           readinessProbe:
