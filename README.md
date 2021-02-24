@@ -72,53 +72,7 @@ Transfer-Encoding: chunked
     "status": "Ordered"
 }
 
-root@seige-74d7df4cd9-7sckv:/# http http://drink:8080/drinks
-HTTP/1.1 200 
-Content-Type: application/hal+json;charset=UTF-8
-Date: Wed, 24 Feb 2021 10:28:25 GMT
-Transfer-Encoding: chunked
-
-{
-    "_embedded": {
-        "drinks": [
-            {
-                "_links": {
-                    "drink": {
-                        "href": "http://drink:8080/drinks/2"
-                    },
-                    "self": {
-                        "href": "http://drink:8080/drinks/2"
-                    }
-                },
-                "createTime": "2021-02-24T10:27:20.846+0000",
-                "orderId": 8,
-                "phoneNumber": "01082947794",
-                "productName": "coffee",
-                "qty": 3,
-                "status": "PaymentApproved"
-            }
-        ]
-    },
-    "_links": {
-        "profile": {
-            "href": "http://drink:8080/profile/drinks"
-        },
-        "search": {
-            "href": "http://drink:8080/drinks/search"
-        },
-        "self": {
-            "href": "http://drink:8080/drinks{?page,size,sort}",
-            "templated": true
-        }
-    },
-    "page": {
-        "number": 0,
-        "size": 20,
-        "totalElements": 1,
-        "totalPages": 1
-    }
-}
-
+# drink 서비스의 이벤트 발생
 root@seige-74d7df4cd9-7sckv:/# http PATCH http://drink:8080/drinks/2 status="Made"
 HTTP/1.1 200 
 Content-Type: application/json;charset=UTF-8
@@ -142,6 +96,7 @@ Transfer-Encoding: chunked
     "status": "Made"
 }
 
+# 배달 서비스 확인
 root@seige-74d7df4cd9-7sckv:/# http http://delivery:8080/deliveries
 HTTP/1.1 200 
 Content-Type: application/hal+json;charset=UTF-8
@@ -160,7 +115,7 @@ Transfer-Encoding: chunked
                         "href": "http://delivery:8080/deliveries/9"
                     }
                 },
-                "orderId": 2,
+                "orderId": 8,
                 "status": "Delivery Started"
             }
         ]
@@ -181,15 +136,99 @@ Transfer-Encoding: chunked
         "totalPages": 1
     }
 }
+
+#주문취소
+root@seige-74d7df4cd9-7sckv:/# http DELETE http://order:8080/orders/8
+HTTP/1.1 204 
+Date: Wed, 24 Feb 2021 10:53:35 GMT
+
+#배송 서비스 내 취소장부 별도 저장
+root@seige-74d7df4cd9-7sckv:/# http http://delivery:8080/cancellations
+HTTP/1.1 200 
+Content-Type: application/hal+json;charset=UTF-8
+Date: Wed, 24 Feb 2021 11:05:01 GMT
+Transfer-Encoding: chunked
+
+{
+    "_embedded": {
+        "cancellations": [
+            {
+                "_links": {
+                    "cancellation": {
+                        "href": "http://delivery:8080/cancellations/10"
+                    },
+                    "self": {
+                        "href": "http://delivery:8080/cancellations/10"
+                    }
+                },
+                "orderId": 8,
+                "status": "Delivery Cancelled"
+            }
+        ]
+    },
+    "_links": {
+        "profile": {
+            "href": "http://delivery:8080/profile/cancellations"
+        },
+        "self": {
+            "href": "http://delivery:8080/cancellations{?page,size,sort}",
+            "templated": true
+        }
+    },
+    "page": {
+        "number": 0,
+        "size": 20,
+        "totalElements": 1,
+        "totalPages": 1
+    }
+}
+
+#배송센터 뷰로 배송내역 조회 가능
+root@seige-74d7df4cd9-7sckv:/# http http://deliverycenter:8080/deliverypages
+HTTP/1.1 200 
+Content-Type: application/hal+json;charset=UTF-8
+Date: Wed, 24 Feb 2021 10:53:38 GMT
+Transfer-Encoding: chunked
+
+{
+    "_embedded": {
+        "deliverypages": [
+            {
+                "_links": {
+                    "deliverypage": {
+                        "href": "http://deliverycenter:8080/deliverypages/2"
+                    },
+                    "self": {
+                        "href": "http://deliverycenter:8080/deliverypages/2"
+                    }
+                },
+                "amt": 6000,
+                "deliveryId": null,
+                "orderId": 8,
+                "status": "Delivery Cancelled"
+            }
+        ]
+    },
+    "_links": {
+        "profile": {
+            "href": "http://deliverycenter:8080/profile/deliverypages"
+        },
+        "search": {
+            "href": "http://deliverycenter:8080/deliverypages/search"
+        },
+        "self": {
+            "href": "http://deliverycenter:8080/deliverypages"
+        }
+    }
+}
 ```
 
 ## API Gateway
-API Gateway를 통하여 동일 진입점으로 진입하여 각 마이크로 서비스를 접근할 수 있다.
-외부에서 접근을 위하여 Gateway의 Service는 LoadBalancer Type으로 생성했다.
+API Gateway를 통하여 동일주소로 진입하여 각 마이크로서비스를 접근할 수 있다.
+외부에서 접근을 위하여 Gateway의 Service는 LoadBalancer Type으로 설정한다.
 
 ```
 # application.yml
-
 spring:
   profiles: docker
   cloud:
@@ -207,27 +246,33 @@ spring:
           uri: http://drink:8080
           predicates:
             - Path=/drinks/**,/orderinfos/**
-        - id: customercenter
-          uri: http://customercenter:8080
+        - id: delivery
+          uri: http://delivery:8080
           predicates:
-            - Path= /mypages/**
+            - Path= /deliveries/**,/cancellations/**
+        - id: deliverycenter
+          uri: http://deliverycenter:8080
+          predicates:
+            - Path= /deliverypages/**
 
 # service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: gateway
+  name: gateway 
   labels:
-    app: gateway
+    app: gateway 
 spec:
   type: LoadBalancer
   ports:
     - port: 8080
       targetPort: 8080
   selector:
-    app: gateway
+    app: gateway 
 ```
-*** 외부 접근 호출 capture(order, payment, drink, customercenter 각각) ***
+*** 외부 접근 호출 capture(배송페이지 열람) ***
+
+
 
 ## 폴리글랏 퍼시스턴스
 
