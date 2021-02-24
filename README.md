@@ -485,20 +485,19 @@ seige-74d7df4cd9-7sckv            1/1     Running   0          25h
 
 ## Persistence Volum Claim
 서비스의 log를 persistence volum을 사용하여 재기동후에도 남아 있을 수 있도록 하였다.
-```
 
+```
 # application.yml
 
-:
 server:
   tomcat:
     accesslog:
       enabled: true
       pattern:  '%h %l %u %t "%r" %s %bbyte %Dms'
-    basedir: /logs/drink
+    basedir: /logs/delivery
 
 logging:
-  path: /logs/drink
+  path: /logs/delivery
   file:
     max-history: 30
   level:
@@ -506,33 +505,13 @@ logging:
 
 # deployment.yaml
 
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: drink
-  labels:
-    app: drink
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: drink
-  template:
-    metadata:
-      labels:
-        app: drink
-    spec:
-      containers:
-      - name: drink
-        image: beatific/drink:v1
-        :
-        volumeMounts:
-        - name: logs
-          mountPath: /logs
-      volumes:
-      - name: logs
-        persistentVolumeClaim:
-          claimName: logs
+volumeMounts:
+  - name: logs
+    mountPath: /logs
+volumes:
+  - name: logs
+    persistentVolumeClaim:
+    claimName: logs
 
 # pvc.yaml
 
@@ -547,17 +526,20 @@ spec:
     requests:
       storage: 1Gi
 ```
-drink deployment를 삭제하고 재기동해도 log는 삭제되지 않는다.
+delivery deployment를 삭제하고 재기동해도 log는 삭제되지 않는다.
 
 ```
-$ kubectl delete -f drink/kubernetes/deployment.yml
-deployment.apps "drink" deleted
+root@labs--619648044:/home/project/team/cafeTest/delivery# kubectl delete deploy delivery
+deployment.apps "delivery" deleted
 
-$ kubectl apply -f drink/kubernetes/deployment.yml
-deployment.apps/drink created
+root@labs--619648044:/home/project/team/cafeTest/delivery# kubectl apply -f kubernetes/deployment.yml
+deployment.apps/delivery created
 
 $ kubectl exec -it drink-7cb565cb4-8c7pq -- /bin/sh
-/ # ls -l /logs/drink/
+/ # ls -l /logs/delivery/
+
+다시 시작!!!!!
+
 total 5568
 drwxr-xr-x    2 root     root          4096 Feb 20 00:00 logs
 -rw-r--r--    1 root     root       4626352 Feb 20 16:34 spring.log
