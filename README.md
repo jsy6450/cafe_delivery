@@ -46,7 +46,7 @@
 
 
 - REST API 의 테스트
-
+```
 # order 서비스의 주문처리
 root@seige-74d7df4cd9-7sckv:/# http http://order:8080/orders phoneNumber="01082947794" productName="coffee" qty=3 amt=6000 
 HTTP/1.1 201 
