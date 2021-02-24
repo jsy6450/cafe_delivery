@@ -276,115 +276,33 @@ spec:
 
 ## 폴리글랏 퍼시스턴스
 
-고객센터(customercenter)는 RDB 보다는 Document DB / NoSQL 계열의 데이터베이스인 Mongo DB 를 사용하기로 하였다. 이를 위해 customercenter의 선언에는 @Entity 가 아닌 @Document로 변경 되었으며, 기존의 Entity Pattern 과 Repository Pattern 적용과 데이터베이스 제품의 설정 (application.yml)과 아래 채번기능 개발 만으로 MongoDB 에 부착시켰다
+배송센터(deliverycenter)는 hsqldb를 사용하여 정상 작동을 확인하였다.
 ```
-#Mypage.scala
-
-@Document
-class Mypage {
-  
-  @Id
-  @BeanProperty
-  var id :Long = 0L
-  :
-```
-MongoDB는 Sequence가 지원되지 않아 별도 Collection을 통해서 id sequence를 생성했다.
-```
-# DatabseSequence.scala
-abstract class Sequence {
-  var seq :Long
-}
-case class InitialSequence(var seq : Long) extends Sequence
-
-@Document(collection = "database_sequences")
-class DatabaseSequence extends Sequence {
-
-  
-  @BeanProperty
-  @Id
-  var id: String = null
-  
-  @BeanProperty
-  var seq :Long = 0L
-
-}
-
-# MypageViewHandler.scala
-
-def generateSequence (seqName :String) :Long = {
-    val query :Query = new Query(Criteria.where("_id").is(seqName));
-    val options :FindAndModifyOptions = new FindAndModifyOptions().returnNew(true).upsert(true)
-    val update :Update = new Update().inc("seq",1)
-    
-    val sequence :Option[DatabaseSequence] = Option(mongoOperations.findAndModify(query, update, options, classOf[DatabaseSequence]))
-    sequence.getOrElse(InitialSequence(1L)).seq
-}
-  
-  @StreamListener(KafkaProcessor.INPUT)
-  def whenOrdered_then_CREATE_1(@Payload ordered :Ordered) {
-    try {
-      if (ordered.isMe()) {
-        
-        val mypage :Mypage = new Mypage()
-        mypage.id = generateSequence(Mypage.SEQUENCE_NAME)
-	:
-
-#pom.xml
+#deliverycenter > pom.xml
 
 <dependencies>
 :
+    <!-- HSQL -->
     <dependency>
-	<groupId>org.springframework.boot</groupId>
-	<artifactId>spring-boot-starter-data-mongodb</artifactId>
+	<groupId>org.hsqldb</groupId>
+	<artifactId>hsqldb</artifactId>
+	<version>2.4.0</version>
+	<scope>runtime</scope>
     </dependency>
 :
 </dependencies>
 
 ```
-## 폴리글랏 프로그래밍
 
-고객관리 서비스(customercenter)의 시나리오인 주문상태 변경에 따라 고객에게 카톡메시지 보내는 기능의 구현 파트는 해당 팀이 scala를 이용하여 구현하기로 하였다. 해당 Scala 구현체는 각 이벤트를 수신하여 처리하는 Kafka consumer 로 구현되었고 코드는 다음과 같다:
-```
-import org.springframework.messaging.SubscribableChannel
-import org.springframework.cloud.stream.annotation.Output
-import org.springframework.cloud.stream.annotation.Input
-import org.springframework.messaging.MessageChannel
+## 동기식 호출 
 
-object KafkaProcessor {
-  final val INPUT = "event-in"
-  final val OUTPUT = "event-out"
-}
+분석단계에서의 조건 중 하나로 주문취소(order)->취소장부(delivery)간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 
+호출 프로토콜은 FeignClient 를 이용하여 호출하도록 한다. 
 
-trait KafkaProcessor {
-
-  @Input(KafkaProcessor.INPUT)
-  def inboundTopic() :SubscribableChannel
-
-  @Output(KafkaProcessor.OUTPUT)
-  def outboundTopic() :MessageChannel
-}
-
- # 카톡호출 API
-import org.springframework.stereotype.Component
-
-@Component
-class KakaoServiceImpl extends KakaoService {
-  
-	override def sendKakao(message :KakaoMessage) {
-		logger.info(s"\nTo. ${message.phoneNumber}\n${message.message}\n")
-	}
-}
+- 배송서비스를 호출하기 위하여 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
 
 ```
-
-## 동기식 호출 과 Fallback 처리
-
-분석단계에서의 조건 중 하나로 주문(order)->결제(payment) 간의 호출은 동기식 일관성을 유지하는 트랜잭션으로 처리하기로 하였다. 호출 프로토콜은 이미 앞서 Rest Repository 에 의해 노출되어있는 REST 서비스를 FeignClient 를 이용하여 호출하도록 한다. 
-
-- 결제서비스를 호출하기 위하여 Stub과 (FeignClient) 를 이용하여 Service 대행 인터페이스 (Proxy) 를 구현 
-
-```
-# (payment) PaymentService.java
+# (order) CancellationService.java
 
 package cafeteria.external;
 
@@ -393,90 +311,18 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 
-@FeignClient(name="payment", url="${feign.client.payment.url}")
-public interface PaymentService {
+import java.util.Date;
 
-    @RequestMapping(method= RequestMethod.POST, path="/payments")
-    public void pay(@RequestBody Payment payment);
+@FeignClient(name="delivery", url="${feign.client.delivery.url}")
+public interface CancellationService {
+
+    @RequestMapping(method= RequestMethod.POST, path="/cancellations")
+    public void save(@RequestBody Cancellation cancellation);
 
 }
 ```
 
-- 주문을 받은 직후(@PostPersist) 결제를 요청하도록 처리
-```
-# Order.java (Entity)
-
-    @PostPersist
-    public void onPostPersist(){
-        :
-
-        Payment payment = new Payment();
-        payment.setOrderId(this.id);
-        payment.setPhoneNumber(this.phoneNumber);
-        payment.setAmt(this.amt);
-        
-        OrderApplication.applicationContext.getBean(PaymentService.class).pay(payment);
-
-
-    }
-```
-
-- 동기식 호출에서는 호출 시간에 따른 타임 커플링이 발생하며, 결제 시스템이 장애가 나면 주문도 못받는다는 것을 확인:
-
-
-```
-# 결제 (payment) 서비스를 잠시 내려놓음
-$ kubectl delete deploy payment
-deployment.apps "payment" deleted
-
-#주문처리
-
-root@siege-5b99b44c9c-8qtpd:/# http http://order:8080/orders phoneNumber="01012345679" productName="coffee" qty=3 amt=5000
-HTTP/1.1 500 
-Connection: close
-Content-Type: application/json;charset=UTF-8
-Date: Sat, 20 Feb 2021 14:39:23 GMT
-Transfer-Encoding: chunked
-{
-    "error": "Internal Server Error",
-    "message": "Could not commit JPA transaction; nested exception is javax.persistence.RollbackException: Error while committing the transaction",
-    "path": "/orders",
-    "status": 500,
-    "timestamp": "2021-02-20T14:39:23.185+0000"
-}
-
-#결제서비스 재기동
-$ kubectl apply -f deployment.yml
-deployment.apps/payment created
-
-#주문처리
-
-root@siege-5b99b44c9c-8qtpd:/# http http://order:8080/orders phoneNumber="01012345679" productName="coffee" qty=3 amt=5000
-HTTP/1.1 201 
-Content-Type: application/json;charset=UTF-8
-Date: Sat, 20 Feb 2021 14:51:42 GMT
-Location: http://order:8080/orders/6
-Transfer-Encoding: chunked
-
-{
-    "_links": {
-        "order": {
-            "href": "http://order:8080/orders/6"
-        },
-        "self": {
-            "href": "http://order:8080/orders/6"
-        }
-    },
-    "amt": 5000,
-    "createTime": "2021-02-20T14:51:40.580+0000",
-    "phoneNumber": "01012345679",
-    "productName": "coffee",
-    "qty": 3,
-    "status": "Ordered"
-}
-```
-- 또한 과도한 요청시에 서비스 장애가 도미노 처럼 벌어질 수 있다. (서킷브레이커, 폴백 처리는 운영단계에서 설명한다.)
-
+- 주문취소가 되어도 배송정보의 취소장부에 내역이 저장된다. (위에 REST API 테스트 내용 있음)
 
 
 ## 비동기식 호출 / 시간적 디커플링 / 장애격리 / 최종 (Eventual) 일관성 테스트
