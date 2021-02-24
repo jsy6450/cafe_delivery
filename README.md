@@ -42,7 +42,7 @@
 1. Event Storming 모델
 ![delivery](https://user-images.githubusercontent.com/31643538/108974871-3be06d80-76c9-11eb-9367-20f5ebf10f85.jpg)
 1. 헥사고날 아키텍처 다이어그램 도출
-![hexa](https://user-images.githubusercontent.com/31643538/108976354-c4abd900-76ca-11eb-9864-1523cdbb5b84.png)
+![hexa](https://user-images.githubusercontent.com/31643538/109002524-af927280-76e9-11eb-9695-66788ba41206.png)
 
 
 - REST API 의 테스트
