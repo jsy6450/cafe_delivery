@@ -271,7 +271,7 @@ spec:
     app: gateway 
 ```
 *** 외부 접근 호출 capture(배송페이지 열람) ***
-
+![gateway](https://user-images.githubusercontent.com/31643538/108998745-b1a60280-76e4-11eb-834b-2db1b8fd7496.png)
 
 
 ## 폴리글랏 퍼시스턴스
