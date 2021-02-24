@@ -462,35 +462,6 @@ Transfer-Encoding: chunked
 
 # 운영
 
-## Liveness / Readiness 설정
-Pod 생성 시 준비되지 않은 상태에서 요청을 받아 오류가 발생하지 않도록 Readiness Probe와 Liveness Probe를 설정했다.
-```
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: order
-  labels:
-    app: order
-spec:
-  :
-        readinessProbe:
-          httpGet:
-            path: '/actuator/health'
-            port: 8080
-          initialDelaySeconds: 10 
-          timeoutSeconds: 2 
-          periodSeconds: 5 
-          failureThreshold: 10
-        livenessProbe:
-          httpGet:
-            path: '/actuator/health'
-            port: 8080
-          initialDelaySeconds: 120
-          timeoutSeconds: 2
-          periodSeconds: 5
-          failureThreshold: 5
-
-```
 ## CI/CD 설정
 
 각 구현체들은 각자의 source repository 에 구성되었고, 개인과제에서는 yml 파일을 사용해서 수동배포를 실행해 보았다.
@@ -753,6 +724,36 @@ Response time:		        5.60 secs
 Transaction rate:	       17.15 trans/sec
 Throughput:		        0.01 MB/sec
 Concurrency:		       96.02
+
+```
+
+## Liveness / Readiness 설정
+Pod 생성 시 준비되지 않은 상태에서 요청을 받아 오류가 발생하지 않도록 Readiness Probe와 Liveness Probe를 설정했다.
+```
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order
+  labels:
+    app: order
+spec:
+  :
+        readinessProbe:
+          httpGet:
+            path: '/actuator/health'
+            port: 8080
+          initialDelaySeconds: 10 
+          timeoutSeconds: 2 
+          periodSeconds: 5 
+          failureThreshold: 10
+        livenessProbe:
+          httpGet:
+            path: '/actuator/health'
+            port: 8080
+          initialDelaySeconds: 120
+          timeoutSeconds: 2
+          periodSeconds: 5
+          failureThreshold: 5
 
 ```
 
