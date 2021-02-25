@@ -10,7 +10,6 @@
     - [폴리글랏 퍼시스턴스](#폴리글랏-퍼시스턴스)
     - [동기식 호출 과 Fallback 처리](#동기식-호출-과-Fallback-처리)
     - [비동기식 호출 과 Eventual Consistency](#비동기식-호출--시간적-디커플링--장애격리--최종-eventual-일관성-테스트)
-    - [Saga Pattern / 보상 트랜잭션](#Saga-Pattern--보상-트랜잭션)
     - [CQRS / Meterialized View](#CQRS--Meterialized-View)
   - [운영](#운영)
     - [Liveness / Readiness 설정](#Liveness--Readiness-설정)
@@ -514,7 +513,7 @@ root@labs--201874186:/home/project/cafe_delivery/delivery/kubernetes# kubectl lo
 ```
 
 
-## Liveness / Readiness 설정
+## Liveness 설정
 Pod 생성 시 준비되지 않은 상태에서 요청을 받아 오류가 발생하지 않도록 Liveness Probe를 설정했다.
 ```
 # deployment.yml
@@ -546,7 +545,7 @@ delivery-8465d4494b-2j6t4         1/1     Running   3          7m36s
 
 ```
 
-## 셀프힐링(무정지배포)
+## 셀프힐링(무정지배포:Readiness)
 readinessProbe 를 설정하여 문제가 있을 경우 스스로 재기동 되도록 한다.
 image 를 변경하면서 pod가 무정지 상태로 재기동 하는 것을 확인 할 수 있다. 
 ```
