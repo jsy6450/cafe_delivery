@@ -8,7 +8,6 @@
     - [DDD 의 적용](#ddd-의-적용)
     - [API Gateway](#API-GATEWAY)
     - [폴리글랏 퍼시스턴스](#폴리글랏-퍼시스턴스)
-    - [폴리글랏 프로그래밍](#폴리글랏-프로그래밍)
     - [동기식 호출 과 Fallback 처리](#동기식-호출-과-Fallback-처리)
     - [비동기식 호출 과 Eventual Consistency](#비동기식-호출--시간적-디커플링--장애격리--최종-eventual-일관성-테스트)
     - [Saga Pattern / 보상 트랜잭션](#Saga-Pattern--보상-트랜잭션)
@@ -17,11 +16,7 @@
     - [Liveness / Readiness 설정](#Liveness--Readiness-설정)
     - [CI/CD 설정](#cicd-설정)
     - [셀프힐링](#셀프힐링)
-    - [동기식 호출 / 서킷 브레이킹 / 장애격리](#동기식-호출--서킷-브레이킹--장애격리)
-    - [오토스케일 아웃](#오토스케일-아웃)
     - [무정지 재배포](#무정지-재배포)
-    - [모니터링](#모니터링)
-    - [Persistence Volum Claim](#Persistence-Volum-Claim)
     - [ConfigMap / Secret](#ConfigMap--Secret)
 
 # 음료배달 서비스 시나리오
@@ -466,6 +461,18 @@ Transfer-Encoding: chunked
 
 각 구현체들은 각자의 source repository 에 구성되었고, 개인과제에서는 yml 파일을 사용해서 수동배포를 실행해 보았다.
 ```
+1) 배포방식1
+--delivery
+mvn package
+docker build -t 336676056763.dkr.ecr.ap-northeast-2.amazonaws.com/delivery:v1 .
+docker login --username AWS -p $(aws ecr get-login-password --region ap-northeast-2) 336676056763.dkr.ecr.ap-northeast-2.amazonaws.com/
+docker push 336676056763.dkr.ecr.ap-northeast-2.amazonaws.com/delivery:v1 
+--ECR에서 푸시된 이미지확인
+kubectl create deploy delivery --image=336676056763.dkr.ecr.ap-northeast-2.amazonaws.com/delivery:v1 
+--배포된 이미지 Status 확인 (kubectl describe pod)
+kubectl expose deploy delivery --type=ClusterIP --port=8080
+
+2) 배포방식2
 root@labs--619648044:/home/project/team/cafeteria-main/gateway/kubernetes# ls
 deployment.yml  service.yaml
 root@labs--619648044:/home/project/team/cafeteria-main/gateway# kubectl apply -f kubernetes/
@@ -482,260 +489,59 @@ payment-84bbf45cd5-f7pd4          1/1     Running   0          22h
 seige-74d7df4cd9-7sckv            1/1     Running   0          25h
 ```
 
-
-## Persistence Volum Claim
-서비스의 log를 persistence volum을 사용하여 재기동후에도 남아 있을 수 있도록 하였다.
-
-```
-# application.yml
-
-server:
-  tomcat:
-    accesslog:
-      enabled: true
-      pattern:  '%h %l %u %t "%r" %s %bbyte %Dms'
-    basedir: /logs/delivery
-
-logging:
-  path: /logs/delivery
-  file:
-    max-history: 30
-  level:
-    org.springframework.cloud: debug
-
-# deployment.yaml
-
-volumeMounts:
-  - name: logs
-    mountPath: /logs
-volumes:
-  - name: logs
-    persistentVolumeClaim:
-    claimName: delivery-logs
-
-# pvc.yaml
-
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: logs
-spec:
-  accessModes:
-  - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-```
-delivery deployment를 삭제하고 재기동해도 log는 삭제되지 않는다.
+## ConfigMap
+Dockerfile의 spring.profiles.active=docker 부분을 환경변수를 지정해서 사용할 수 있도록 하였다.
 
 ```
-root@labs--619648044:/home/project/team/cafeTest/delivery# kubectl delete deploy delivery
-deployment.apps "delivery" deleted
-
-root@labs--619648044:/home/project/team/cafeTest/delivery# kubectl apply -f kubernetes/deployment.yml
-deployment.apps/delivery created
-
-$ kubectl exec -it drink-7cb565cb4-8c7pq -- /bin/sh
-/ # ls -l /logs/delivery/
-
-다시 시작!!!!!
-
-total 5568
-drwxr-xr-x    2 root     root          4096 Feb 20 00:00 logs
--rw-r--r--    1 root     root       4626352 Feb 20 16:34 spring.log
--rw-r--r--    1 root     root        177941 Feb 20 08:17 spring.log.2021-02-19.0.gz
--rw-r--r--    1 root     root        235383 Feb 20 15:48 spring.log.2021-02-20.0.gz
--rw-r--r--    1 root     root        210417 Feb 20 15:55 spring.log.2021-02-20.1.gz
--rw-r--r--    1 root     root        214386 Feb 20 15:55 spring.log.2021-02-20.2.gz
--rw-r--r--    1 root     root        214686 Feb 20 16:01 spring.log.2021-02-20.3.gz
-drwxr-xr-x    3 root     root          4096 Feb 19 17:34 work
-
-```
-
-## ConfigMap / Secret
-mongo db의 database이름과 username, password는 환경변수를 지정해서 사용핳 수 있도록 하였다.
-database 이름은 kubernetes의 configmap을 사용하였고 username, password는 secret을 사용하여 지정하였다.
-
-```
-# secret 생성
-kubectl create secret generic mongodb --from-literal=username=mongodb --from-literal=password=mongodb --namespace cafeteria
-
 # configmap.yaml
 
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: mongodb
-  namespace: cafeteria
+  name: spring
+  namespace: default
 data:
-  database: "cafeteria"
+  profile: "docker"
   
+# Dockerfile
+FROM openjdk:8u212-jdk-alpine
+COPY target/*SNAPSHOT.jar app.jar
+EXPOSE 8080
+ENTRYPOINT ["java","-Xmx400M","-Djava.security.egd=file:/dev/./urandom","-jar","/app.jar","--spring.profiles.active=docker"]
 
-# application.yml
-
-spring:
-  data:
-    mongodb:
-      uri: mongodb://my-mongodb-0.my-mongodb-headless.mongodb.svc.cluster.local:27017,my-mongodb-1.my-mongodb-headless.mongodb.svc.cluster.local:27017
-      database: ${MONGODB_DATABASE}
-      username: ${MONGODB_USERNAME}
-      password: ${MONGODB_PASSWORD}
-
-#buildspec.yaml
-spec:
-containers:
-  - name: $_PROJECT_NAME
-    image: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$_PROJECT_NAME:$CODEBUILD_RESOLVED_SOURCE_VERSION
-    ports:
-    - containerPort: 8080
-    env:
-    - name: SPRING_PROFILES_ACTIVE
-      value: "docker"
-    - name: MONGODB_DATABASE
-      valueFrom:
-	configMapKeyRef:
-	  name: mongodb
-	  key: database
-    - name: MONGODB_USERNAME
-      valueFrom:
-	secretKeyRef:
-	  name: mongodb
-	  key: username
-    - name: MONGODB_PASSWORD
-      valueFrom:
-	secretKeyRef:
-	  name: mongodb
-	  key: password
+root@labs--201874186:/home/project/cafe_delivery/delivery/kubernetes# kubectl logs -f delivery-6dfffc457d-c75lm | grep profile
+2021-02-25 05:03:51.970  INFO 1 --- [           main] cafeteria.DeliveryApplication            : The following profiles are active: docker
 ```
 
-### 오토스케일 아웃
-앞서 CB 는 시스템을 안정되게 운영할 수 있게 해줬지만 사용자의 요청을 100% 받아들여주지 못했기 때문에 이에 대한 보완책으로 자동화된 확장 기능을 적용하고자 한다. 
-
-
-- 결제서비스에 대한 replica 를 동적으로 늘려주도록 HPA 를 설정한다. 설정은 CPU 사용량이 15프로를 넘어서면 replica 를 10개까지 늘려준다:
-```
-$ kubectl get pods
-NAME                              READY   STATUS    RESTARTS   AGE
-customercenter-7f57cf5f9f-csp2b   1/1     Running   1          20h
-drink-7cb565cb4-d2vwb             1/1     Running   0          37m
-gateway-5dd866cbb6-czww9          1/1     Running   0          3d1h
-order-595c9b45b9-xppbf            1/1     Running   0          36m
-payment-698bfbdf7f-vp5ft          1/1     Running   0          2m32s
-siege-5b99b44c9c-8qtpd            1/1     Running   0          3d1h
-
-
-$ kubectl autoscale deploy payment --min=1 --max=10 --cpu-percent=15
-horizontalpodautoscaler.autoscaling/payment autoscaled
-
-$ kubectl get hpa
-NAME      REFERENCE            TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
-payment   Deployment/payment   2%/15%    1         10        1          2m35s
-
-# CB 에서 했던 방식대로 워크로드를 2분 동안 걸어준다.
-
-# siege -c100 -t60s --content-type "application/json" 'http://order:8080/orders POST {"phoneNumber":"01087654321", "productName":"coffee", "qty":2, "amt":1000}'
-** SIEGE 4.0.4
-** Preparing 100 concurrent users for battle.
-The server is now under siege...siege aborted due to excessive socket failure; you
-can change the failure threshold in $HOME/.siegerc
-
-Transactions:                    626 hits
-Availability:                  35.79 %
-Elapsed time:                  52.29 secs
-Data transferred:               1.06 MB
-Response time:                  6.95 secs
-Transaction rate:              11.97 trans/sec
-Throughput:                     0.02 MB/sec
-Concurrency:                   83.23
-Successful transactions:         626
-Failed transactions:            1123
-Longest transaction:           30.08
-Shortest transaction:           0.00
-
-$ kubectl get pods
-NAME                              READY   STATUS    RESTARTS   AGE
-customercenter-7f57cf5f9f-csp2b   1/1     Running   3          21h
-drink-7cb565cb4-d2vwb             1/1     Running   0          97m
-gateway-5dd866cbb6-czww9          1/1     Running   0          3d2h
-order-595c9b45b9-xppbf            1/1     Running   1          96m
-payment-698bfbdf7f-2bc56          1/1     Running   0          2m55s
-payment-698bfbdf7f-bcmb9          1/1     Running   0          3m42s
-payment-698bfbdf7f-f5kf2          1/1     Running   0          3m42s
-payment-698bfbdf7f-kclfb          1/1     Running   0          2m55s
-payment-698bfbdf7f-vmcd4          1/1     Running   0          2m40s
-payment-698bfbdf7f-vp5ft          1/1     Running   0          62m
-payment-698bfbdf7f-wg769          1/1     Running   0          2m40s
-payment-698bfbdf7f-xbdqp          1/1     Running   0          2m40s
-payment-698bfbdf7f-z8trs          1/1     Running   0          2m55s
-payment-698bfbdf7f-z9hk7          1/1     Running   0          2m40s
-siege-5b99b44c9c-8qtpd            1/1     Running   0          3d2h
-```
-
-- 오토스케일이 어떻게 되고 있는지 모니터링을 걸어둔다:
-```
-kubectl get deploy payment -w
-```
-- 어느정도 시간이 흐른 후 (약 30초) 스케일 아웃이 벌어지는 것을 확인할 수 있다:
-```
-NAME      READY   UP-TO-DATE   AVAILABLE   AGE
-payment   1/1     1            1           2m24s
-payment   1/4     1            1           3m12s
-payment   1/4     1            1           3m12s
-payment   1/4     1            1           3m12s
-payment   1/4     4            1           3m12s
-payment   1/8     4            1           3m12s
-payment   1/8     4            1           3m12s
-payment   1/8     4            1           3m12s
-payment   1/8     8            1           3m12s
-payment   1/10    8            1           3m28s
-payment   1/10    8            1           3m28s
-payment   1/10    8            1           3m28s
-payment   1/10    10           1           3m28s
-payment   2/10    10           2           5m17s
-payment   3/10    10           3           5m21s
-payment   4/10    10           4           5m23s
-:
-
-# siege 의 로그를 보아도 전체적인 성공률이 높아진 것을 확인 할 수 있다. 
-
-Transactions:		        5078 hits
-Availability:		       92.45 %
-Elapsed time:		       120 secs
-Data transferred:	        0.34 MB
-Response time:		        5.60 secs
-Transaction rate:	       17.15 trans/sec
-Throughput:		        0.01 MB/sec
-Concurrency:		       96.02
-
-```
 
 ## Liveness / Readiness 설정
-Pod 생성 시 준비되지 않은 상태에서 요청을 받아 오류가 발생하지 않도록 Readiness Probe와 Liveness Probe를 설정했다.
+Pod 생성 시 준비되지 않은 상태에서 요청을 받아 오류가 발생하지 않도록 Liveness Probe를 설정했다.
 ```
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: order
-  labels:
-    app: order
-spec:
-  :
-        readinessProbe:
-          httpGet:
-            path: '/actuator/health'
-            port: 8080
-          initialDelaySeconds: 10 
-          timeoutSeconds: 2 
-          periodSeconds: 5 
-          failureThreshold: 10
-        livenessProbe:
-          httpGet:
-            path: '/actuator/health'
-            port: 8080
-          initialDelaySeconds: 120
-          timeoutSeconds: 2
-          periodSeconds: 5
-          failureThreshold: 5
+ livenessProbe:
+   httpGet:
+   path: '/actuator/health'
+   port: 8080
+   initialDelaySeconds: 120
+   timeoutSeconds: 2
+   periodSeconds: 5
+   failureThreshold: 5
+
+>> 테스트 방법 : path 경로를 healthxxx 로 지정한 후 배포하여 정상적인 상태(health)를 방해하여 pod가 restart 되도록 유도함. 
+root@labs--201874186:/home/project/cafe_delivery/delivery/kubernetes# kubectl get pods -w
+NAME                              READY   STATUS    RESTARTS   AGE
+delivery-8465d4494b-2j6t4         0/1     Running   0          4s
+deliverycenter-6b985f5ff8-f8zpc   1/1     Running   0          42h
+gateway-56d9f65945-2rsrm          1/1     Running   0          17h
+order-7ffd9b49b5-vfx7x            1/1     Running   0          38h
+payment-84bbf45cd5-f7pd4          1/1     Running   0          40h
+seige-74d7df4cd9-7sckv            1/1     Running   0          42h
+delivery-8465d4494b-2j6t4         1/1     Running   0          25s
+delivery-8465d4494b-2j6t4         0/1     Running   1          2m22s
+delivery-8465d4494b-2j6t4         1/1     Running   1          2m45s
+delivery-8465d4494b-2j6t4         0/1     Running   2          4m48s
+delivery-8465d4494b-2j6t4         1/1     Running   2          5m10s
+delivery-8465d4494b-2j6t4         0/1     Running   3          7m12s
+delivery-8465d4494b-2j6t4         1/1     Running   3          7m36s
 
 ```
 
@@ -778,129 +584,4 @@ customercenter-7f57cf5f9f-csp2b   0/1     Running   1          20h
 customercenter-7f57cf5f9f-csp2b   1/1     Running   1          20h
 
 ```
-## 동기식 호출 / 서킷 브레이킹 / 장애격리
-
-* 서킷 브레이킹 프레임워크의 선택: Spring FeignClient + Hystrix 옵션을 사용하여 구현함
-
-시나리오는 단말앱(order)-->결제(payment) 호출 시의 연결을 RESTful Request/Response 로 연동하여 구현이 되어있고, 결제 요청이 과도할 경우 CB 를 통하여 장애격리.
-
-- Hystrix 를 설정:  요청처리 쓰레드에서 처리시간이 610 밀리가 넘어서기 시작하여 어느정도 유지되면 CB 회로가 닫히도록 (요청을 빠르게 실패처리, 차단) 설정
-```
-# application.yml
-
-feign:
-  hystrix:
-    enabled: false 
-
-hystrix:
-  command:
-    default:
-      execution:
-        isolation:
-          strategy: THREAD
-          thread:
-            timeoutInMilliseconds: 610         #설정 시간동안 처리 지연발생시 timeout and 설정한 fallback 로직 수행     
-      circuitBreaker:
-        requestVolumeThreshold: 20           # 설정수 값만큼 요청이 들어온 경우만 circut open 여부 결정 함
-        errorThresholdPercentage: 10        # requestVolumn값을 넘는 요청 중 설정 값이상 비율이 에러인 경우 circuit open
-        sleepWindowInMilliseconds: 5000    # 한번 오픈되면 얼마나 오픈할 것인지 
-      metrics:
-        rollingStats:
-          timeInMilliseconds: 10000   
-
-```
-
-- 피호출 서비스(결제:payment) 의 임의 부하 처리 - 400 밀리에서 증감 220 밀리 정도 왔다갔다 하게
-```
-# (payment) Payment.java (Entity)
-
-    @PrePersist
-    public void onPrePersist(){  //결제이력을 저장한 후 적당한 시간 끌기
-
-        :
-        
-        try {
-            Thread.currentThread().sleep((long) (400 + Math.random() * 220));
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-    }
-```
-
-* 부하테스터 siege 툴을 통한 서킷 브레이커 동작 확인:
-- 동시사용자 100명
-- 60초 동안 실시
-```
-# siege -c100 -t60s --content-type "application/json" 'http://order:8080/orders POST {"phoneNumber":"01087654321", "productName":"coffee", "qty":2, "amt":1000}'
-```
-![image](https://user-images.githubusercontent.com/75828964/106759329-f9051a00-6675-11eb-93fa-daf7924d5718.png)
-![image](https://user-images.githubusercontent.com/75828964/106759337-fd313780-6675-11eb-90ac-e62f5fbc6648.png)
-
-- 운영시스템은 죽지 않고 지속적으로 CB 에 의하여 적절히 회로가 열림과 닫힘이 벌어지면서 자원을 보호하고 있음을 보여줌. 하지만, 63.55% 가 성공하였고, 46%가 실패했다는 것은 고객 사용성에 있어 좋지 않기 때문에 Retry 설정과 동적 Scale out (replica의 자동적 추가,HPA) 을 통하여 시스템을 확장 해주는 후속처리가 필요.
-
-- Retry 의 설정 (istio)
-- Availability 가 높아진 것을 확인 (siege)
-
-
-
-## 무정지 재배포
-
-* 먼저 무정지 재배포가 100% 되는 것인지 확인하기 위해서 Autoscaler 이나 CB 설정을 제거함
-
-- seige 로 배포작업 직전에 워크로드를 모니터링 함.
-```
-siege -c100 -t120S -r10 --content-type "application/json" 'localhost:8081/orders POST {"phoneNumber": "01012345678","productName": "coffee","qty": 2,"amt": 1000}'
-
-** SIEGE 4.0.5
-** Preparing 100 concurrent users for battle.
-The server is now under siege...
-
-HTTP/1.1 201     0.68 secs:     207 bytes ==> POST http://localhost:8081/orders
-HTTP/1.1 201     0.68 secs:     207 bytes ==> POST http://localhost:8081/orders
-HTTP/1.1 201     0.70 secs:     207 bytes ==> POST http://localhost:8081/orders
-HTTP/1.1 201     0.70 secs:     207 bytes ==> POST http://localhost:8081/orders
-:
-
-```
-
-- 새버전으로의 배포 시작
-```
-kubectl set image deployment/drink drink=beatific/order:v2
-```
-
-- seige 의 화면으로 넘어가서 Availability 가 100% 미만으로 떨어졌는지 확인
-```
-Transactions:		        3078 hits
-Availability:		       70.45 %
-Elapsed time:		       120 secs
-Data transferred:	        0.34 MB
-Response time:		        5.60 secs
-Transaction rate:	       17.15 trans/sec
-Throughput:		        0.01 MB/sec
-Concurrency:		       96.02
-
-```
-배포기간중 Availability 가 평소 100%에서 70% 대로 떨어지는 것을 확인. 원인은 쿠버네티스가 성급하게 새로 올려진 서비스를 READY 상태로 인식하여 서비스 유입을 진행한 것이기 때문. 이를 막기위해 Readiness Probe 를 설정함:
-
-```
-# deployment.yaml 의 readiness probe 의 설정:
-
-
-kubectl apply -f kubernetes/deployment.yaml
-```
-
-- 동일한 시나리오로 재배포 한 후 Availability 확인:
-```
-Transactions:		        3078 hits
-Availability:		       100 %
-Elapsed time:		       120 secs
-Data transferred:	        0.34 MB
-Response time:		        5.60 secs
-Transaction rate:	       17.15 trans/sec
-Throughput:		        0.01 MB/sec
-Concurrency:		       96.02
-
-```
-
-배포기간 동안 Availability 가 변화없기 때문에 무정지 재배포가 성공한 것으로 확인됨.
 
