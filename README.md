@@ -90,7 +90,7 @@ Transfer-Encoding: chunked
     "status": "Made"
 }
 
-# 배달 서비스 확인
+# 배송 서비스 확인
 root@seige-74d7df4cd9-7sckv:/# http http://delivery:8080/deliveries
 HTTP/1.1 200 
 Content-Type: application/hal+json;charset=UTF-8
