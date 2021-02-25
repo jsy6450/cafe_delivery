@@ -511,7 +511,7 @@ volumeMounts:
 volumes:
   - name: logs
     persistentVolumeClaim:
-    claimName: logs
+    claimName: delivery-logs
 
 # pvc.yaml
 
