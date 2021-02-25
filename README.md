@@ -15,7 +15,7 @@
     - [CI/CD 설정](#cicd-설정)
     - [셀프힐링](#셀프힐링)
     - [무정지 재배포](#무정지-재배포)
-    - [ConfigMap / Secret](#ConfigMap--Secret)
+    - [ConfigMap](#ConfigMap)
 
 # 음료배달 서비스 시나리오
 
